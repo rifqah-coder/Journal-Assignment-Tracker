@@ -1,4 +1,3 @@
-
 import streamlit as st
 from datetime import datetime
 
@@ -6,39 +5,37 @@ from datetime import datetime
 st.set_page_config(page_title="Assignment Tracker", layout="wide")
 
 # --- SESSION STATE MANAGEMENT ---
-# Initialize assignments list in session state if it doesn't exist
 if 'assignments' not in st.session_state:
     st.session_state.assignments = []
 
-# Helper variable to track if we are editing an existing assignment
 if 'edit_index' not in st.session_state:
     st.session_state.edit_index = None
 
 # --- CSS STYLING ---
-# Custom CSS to highlight the closest deadline in Red
 st.markdown("""
 <style>
-.urgent-assignment {
+/* HARD Style (Red Border & Bg) */
+.hard-assignment {
     background-color: #ffebee;
     padding: 15px;
     border-radius: 5px;
     border-left: 5px solid red;
     margin-bottom: 10px;
 }
-.normal-assignment {
-    background-color: #f0f2f6;
+/* EASY Style (Green Border & Bg) */
+.easy-assignment {
+    background-color: #e8f5e9;
     padding: 15px;
     border-radius: 5px;
+    border-left: 5px solid green;
     margin-bottom: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
 
+
 # --- HELPER FUNCTIONS ---
-
-
 def get_deadline_dt(assignment):
-    """Combines date and time for sorting."""
     return datetime.combine(assignment['date'], assignment['time'])
 
 
@@ -48,7 +45,6 @@ st.title("📚 Assignment Tracker")
 # --- INPUT SECTION (ADD / EDIT) ---
 st.subheader("Add / Edit Assignment")
 
-# Use a form to prevent the app from reloading on every keystroke
 with st.form("assignment_form", clear_on_submit=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -56,6 +52,7 @@ with st.form("assignment_form", clear_on_submit=True):
         date = st.date_input("Due Date")
     with col2:
         time = st.time_input("Due Time")
+        marks = st.number_input("Marks (Points)", min_value=0, value=10, step=1)
 
     description = st.text_area("Description")
 
@@ -69,28 +66,23 @@ with st.form("assignment_form", clear_on_submit=True):
                 'title': title,
                 'date': date,
                 'time': time,
+                'marks': marks,
                 'description': description
             }
 
             if st.session_state.edit_index is not None:
-                # LOGIC: Update existing assignment
-                # Note: We need to find the original index in the unsorted list or handle IDs.
-                # For simplicity, we will replace the item at the specific index of the SORTED list
-                # which requires us to sort first.
                 sorted_indices = sorted(range(len(st.session_state.assignments)),
                                         key=lambda i: get_deadline_dt(st.session_state.assignments[i]))
                 original_index = sorted_indices[st.session_state.edit_index]
                 st.session_state.assignments[original_index] = new_assignment
-                st.session_state.edit_index = None  # Reset edit mode
+                st.session_state.edit_index = None
                 st.success("Assignment updated!")
             else:
-                # LOGIC: SAVE assignment
                 st.session_state.assignments.append(new_assignment)
                 st.success("Assignment added!")
 
             st.rerun()
 
-# Cancel Edit Button
 if st.session_state.edit_index is not None:
     if st.button("Cancel Edit"):
         st.session_state.edit_index = None
@@ -99,40 +91,57 @@ if st.session_state.edit_index is not None:
 st.divider()
 
 # --- DISPLAY SECTION ---
-# LOGIC: SORT assignments by closest deadline
 sorted_assignments = sorted(st.session_state.assignments, key=get_deadline_dt)
 
 if not sorted_assignments:
-    st.info("No assignments yet. Add one above!")
+    st.info("No assignments yet.")
 else:
     st.subheader("Your Assignments")
 
-    # FOR each assignment
     for i, assignment in enumerate(sorted_assignments):
 
-        # LOGIC: IF assignment is closest deadline THEN SET color = red
-        if i == 0:
-            st.markdown(f"<div class='urgent-assignment'>", unsafe_allow_html=True)
-            urgency_label = "🔴 CLOSEST DEADLINE"
-        else:
-            st.markdown(f"<div class='normal-assignment'>", unsafe_allow_html=True)
-            urgency_label = ""
+        # --- LOGIC: Calculate Score and Status ---
+        due_dt = get_deadline_dt(assignment)
+        now_dt = datetime.now()
+        delta = due_dt - now_dt
+        days_left = delta.days
 
-        # Display Content
+        if days_left <= 0:
+            days_left = 0.1
+
+        score = assignment['marks'] / days_left
+
+        # DECISION: if score > 10?
+        if score > 10:
+            status = "HARD"
+            css_class = "hard-assignment"
+            text_color = "red"  # Fixed: Hard is Red
+            status_icon = "🔥"
+        else:
+            status = "EASY"
+            css_class = "easy-assignment"
+            text_color = "green"  # Fixed: Easy is Green
+            status_icon = "✅"
+
+        # --- DISPLAY ---
+        st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
+
         col_content, col_menu = st.columns([3, 1])
 
         with col_content:
-            st.markdown(f"### {assignment['title']} {urgency_label}")
+            # UPDATED: Uses dynamic text_color variable
+            st.markdown(
+                f"### {assignment['title']} <span style='color:{text_color}; font-weight:bold;'>[{status}]</span>",
+                unsafe_allow_html=True)
             st.write(f"📅 **Due:** {assignment['date'].strftime('%Y-%m-%d')} at {assignment['time'].strftime('%H:%M')}")
+            st.write(f"🏆 **Marks:** {assignment['marks']} | 📉 **Score:** {score:.2f}")
+
             if assignment['description']:
                 with st.expander("View Description"):
                     st.write(assignment['description'])
 
-        # LOGIC: DISPLAY assignment list with 3-dot menu
-        # In Streamlit, we simulate a "Menu" using a selectbox or columns of buttons.
-        # Here we use a Selectbox for the "3-dot" feel.
+        # MENU
         with col_menu:
-            # We use a unique key for every selectbox
             action = st.selectbox(
                 "Actions",
                 ["Options...", "View", "Edit", "Delete"],
@@ -142,24 +151,18 @@ else:
 
             if action == "View":
                 st.info(f"**Details:**\n{assignment['description']}")
-                # Reset selectbox immediately so it doesn't stay stuck on "View"
                 st.rerun()
 
             elif action == "Edit":
-                # LOGIC: EDIT assignment details
                 st.session_state.edit_index = i
                 st.rerun()
 
             elif action == "Delete":
-                # LOGIC: DISPLAY confirmation popup
-                if st.checkbox(f"Confirm delete '{assignment['title']}?", key=f"confirm_{i}"):
-                    # Remove from the main list (need to find original index)
+                if st.checkbox(f"Confirm delete?", key=f"confirm_{i}"):
                     sorted_indices = sorted(range(len(st.session_state.assignments)),
-                key= lambda k: get_deadline_dt(st.session_state.assignments[k]))
-                original_index = sorted_indices[i]
+                                            key=lambda k: get_deadline_dt(st.session_state.assignments[k]))
+                    original_index = sorted_indices[i]
+                    del st.session_state.assignments[original_index]
+                    st.rerun()
 
-                # LOGIC: REMOVE assignment
-                del st.session_state.assignments[original_index]
-                st.rerun()
-
-                st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
