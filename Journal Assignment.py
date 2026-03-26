@@ -134,7 +134,7 @@ else:
                 f"### {assignment['title']} <span style='color:{text_color}; font-weight:bold;'>[{status}]</span>",
                 unsafe_allow_html=True)
             st.write(f"📅 **Due:** {assignment['date'].strftime('%Y-%m-%d')} at {assignment['time'].strftime('%H:%M')}")
-            st.write(f"🏆 **Marks:** {assignment['marks']} | 📉 **Score:** {score:.2f}")
+            st.write(f"🏆 **Marks:** {assignment['marks']}")
 
             if assignment['description']:
                 with st.expander("View Description"):
